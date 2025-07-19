@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>YouTube Monitor</title>
+</head>
+<body>
+    <h1>Các video mới</h1>
+    {% for v in videos %}
+        <p><strong>{{ v.name }}</strong>: <a href="https://www.youtube.com/watch?v={{ v.video_id }}">{{ v.title }}</a></p>
+    {% endfor %}
+
+    <h2>Thêm kênh mới</h2>
+    <form method="POST" action="/add">
+        Tên kênh: <input name="name"><br>
+        Channel ID: <input name="channel_id"><br>
+        <button type="submit">Thêm</button>
+    </form>
+</body>
+</html>
