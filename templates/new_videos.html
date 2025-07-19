@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Video mới trong 1 ngày</title>
+</head>
+<body>
+    <h1>🆕 Các video mới trong 24 giờ</h1>
+    {% if videos %}
+        {% for channel, videos in videos.items() %}
+            <h2>{{ channel }}</h2>
+            <ul>
+            {% for video in videos %}
+                <li><a href="https://www.youtube.com/watch?v={{ video.id }}">{{ video.title }}</a></li>
+            {% endfor %}
+            </ul>
+        {% endfor %}
+    {% else %}
+        <p>Không có video mới nào trong 24h gần đây.</p>
+    {% endif %}
+    <hr>
+    <a href="/">← Quay lại trang chính</a>
+</body>
+</html>

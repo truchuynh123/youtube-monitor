@@ -1,21 +1,74 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
 <head>
+    <meta charset="UTF-8">
     <title>YouTube Monitor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+        }
+        h1 {
+            color: #cc0000;
+        }
+        input[type="text"] {
+            width: 400px;
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+        input[type="submit"] {
+            padding: 8px 16px;
+            background-color: #cc0000;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        li {
+            padding: 4px 0;
+        }
+        .channel {
+            margin-bottom: 20px;
+        }
+        a {
+            color: #cc0000;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
 </head>
 <body>
-    <h1>Các video mới</h1>
-    {% for v in videos %}
-    <p><strong>{{ v.name }}</strong>: 
-        <a href="https://www.youtube.com/watch?v={{ v.video_id }}">{{ v.title }}</a>
-    </p>
-    {% endfor %}
 
-    <h2>Thêm kênh mới</h2>
-    <form method="POST" action="/add">
-        Tên kênh: <input name="name"><br>
-        Channel ID: <input name="channel_id"><br>
-        <button type="submit">Thêm</button>
+    <h1>🎥 YouTube Monitor</h1>
+
+    <h2>📋 Danh sách kênh đang theo dõi</h2>
+    {% if channels %}
+        <ul>
+            {% for channel in channels %}
+                <li class="channel">✅ <strong>{{ channel.name }}</strong> — ID: {{ channel.id }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>Chưa có kênh nào.</p>
+    {% endif %}
+
+    <hr>
+
+    <h2>➕ Thêm kênh mới</h2>
+    <form method="post" action="/add_channel">
+        <label for="link">🔗 Link kênh (ví dụ: https://www.youtube.com/@MixiGaming3con):</label><br>
+        <input type="text" name="link" required><br>
+        <input type="submit" value="Thêm">
     </form>
+
+    <hr>
+
+    <a href="/fetch_new_videos">🆕 Xem các video mới nhất trong 24h từ tất cả kênh</a>
+
 </body>
 </html>
