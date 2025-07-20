@@ -8,3 +8,10 @@ services:
     envVars:
       - key: YOUTUBE_API_KEY
         sync: false
+
+  - type: worker
+    name: youtube-monitor-worker
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: python monitor.py
