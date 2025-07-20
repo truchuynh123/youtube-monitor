@@ -1,34 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>YouTube Channel Monitor</title>
+    <title>YouTube Monitor</title>
 </head>
 <body>
-    <h1>🛠️ Thêm Kênh YouTube</h1>
-    <form method="POST" action="{{ url_for('add_channel') }}">
-        <input type="text" name="channel_url" placeholder="Link kênh YouTube (@ hoặc URL)" required><br>
-        <input type="text" name="channel_id_manual" placeholder="Nhập Channel ID (nếu không tự lấy được)"><br>
-        <input type="text" name="channel_name_manual" placeholder="Nhập tên kênh thủ công (nếu không tự lấy được)"><br>
-        <input type="text" name="folder_name" placeholder="Tên thư mục lưu video" required><br>
-        <input type="text" name="download_path" placeholder="Thư mục tổng (mặc định: downloads)"><br>
-        <button type="submit">➕ Thêm kênh</button>
-    </form>
+    <h1>Các video mới</h1>
+    {% for v in videos %}
+    <p><strong>{{ v.name }}</strong>: 
+        <a href="https://www.youtube.com/watch?v={{ v.video_id }}">{{ v.title }}</a>
+    </p>
+    {% endfor %}
 
-    <hr>
-    <h2>📺 Danh sách kênh đang theo dõi</h2>
-    {% if channels %}
-        <ul>
-        {% for cid, info in channels.items() %}
-            <li>
-                <strong>{{ info.name }}</strong> ({{ cid }})<br>
-                📁 Folder: {{ info.download_path }}/{{ info.folder }}<br>
-                🕒 Đã thêm: {{ info.added }}
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>Chưa có kênh nào được thêm.</p>
-    {% endif %}
+    <h2>Thêm kênh mới</h2>
+    <form method="POST" action="/add">
+        Tên kênh: <input name="name"><br>
+        Channel ID: <input name="channel_id"><br>
+        <button type="submit">Thêm</button>
+    </form>
 </body>
 </html>

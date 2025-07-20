@@ -1,84 +1,62 @@
-import os
+from flask import Flask, render_template, request, redirect
+import requests
 import json
-import datetime
-from flask import Flask, render_template, request, redirect, url_for
-from yt_dlp import YoutubeDL
-from urllib.parse import urlparse
-import re
+import os
 
 app = Flask(__name__)
-
 CHANNELS_FILE = "channels.json"
 
+# Load danh sách kênh từ file
 def load_channels():
     if os.path.exists(CHANNELS_FILE):
         with open(CHANNELS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    return {}
+    return []
 
-def save_channels(data):
+# Lưu danh sách kênh vào file
+def save_channels(channels):
     with open(CHANNELS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+        json.dump(channels, f, indent=2)
 
-def extract_channel_id(url):
-    ydl_opts = {'quiet': True, 'extract_flat': True, 'skip_download': True}
+# Lấy video mới nhất từ một kênh YouTube (qua RSS)
+def fetch_latest_video(channel_id):
     try:
-        with YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return info.get("channel_id")
-    except Exception as e:
-        print("⚠️ Không thể trích xuất channel_id:", e)
-        return None
+        rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+        resp = requests.get(rss_url)
+        if resp.status_code != 200:
+            return None
 
-def get_channel_name(channel_id):
-    ydl_opts = {'quiet': True, 'extract_flat': True, 'skip_download': True}
-    try:
-        with YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"https://www.youtube.com/channel/{channel_id}", download=False)
-            return info.get("uploader") or channel_id
+        from xml.etree import ElementTree as ET
+        root = ET.fromstring(resp.text)
+        entry = root.find("{http://www.w3.org/2005/Atom}entry")
+        if entry is not None:
+            title = entry.find("{http://www.w3.org/2005/Atom}title").text
+            video_id = entry.find("{http://www.youtube.com/xml/schemas/2015}videoId").text
+            return {"title": title, "video_id": video_id}
     except Exception as e:
-        print("⚠️ Không thể lấy tên kênh:", e)
-        return channel_id
+        print(f"Lỗi khi lấy video từ kênh {channel_id}: {e}")
+    return None
 
 @app.route("/", methods=["GET"])
 def index():
     channels = load_channels()
-    return render_template("index.html", channels=channels)
+    videos = []
+    for ch in channels:
+        video = fetch_latest_video(ch["channel_id"])
+        if video:
+            videos.append({"name": ch["name"], "video_id": video["video_id"], "title": video["title"]})
+    return render_template("index.html", videos=videos)
 
-@app.route("/add_channel", methods=["POST"])
+@app.route("/add", methods=["POST"])
 def add_channel():
-    url = request.form.get("channel_url")
-    folder = request.form.get("folder_name")
-    download_path = request.form.get("download_path") or "downloads"
-    channel_id_manual = request.form.get("channel_id_manual")
-    channel_name_manual = request.form.get("channel_name_manual")
+    name = request.form.get("name")
+    channel_id = request.form.get("channel_id")
+    if name and channel_id:
+        channels = load_channels()
+        channels.append({"name": name, "channel_id": channel_id})
+        save_channels(channels)
+    return redirect("/")
 
-    if not url or not folder:
-        return "Thiếu thông tin đầu vào", 400
-
-    channel_id = extract_channel_id(url)
-
-    if not channel_id and channel_id_manual:
-        channel_id = channel_id_manual.strip()
-
-    if not channel_id:
-        return "Không thể trích xuất Channel ID từ URL và không có Channel ID thủ công", 400
-
-    if channel_name_manual:
-        channel_name = channel_name_manual.strip()
-    else:
-        channel_name = get_channel_name(channel_id)
-
-    channels = load_channels()
-    channels[channel_id] = {
-        "name": channel_name,
-        "folder": folder,
-        "download_path": download_path,
-        "added": datetime.datetime.now(datetime.UTC).isoformat()
-    }
-    save_channels(channels)
-    return redirect(url_for("index"))
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # Render yêu cầu lấy PORT từ biến môi trường
+    port = int(os.environ.get("PORT", 5000))  # Render sẽ cung cấp PORT qua biến môi trường
     app.run(host="0.0.0.0", port=port)
-
