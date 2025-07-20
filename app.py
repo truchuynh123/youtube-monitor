@@ -1,15 +1,13 @@
-import threading
+from flask import Flask, render_template, request, redirect
+import requests
 import json
 import os
 import datetime
-from flask import Flask, request, redirect, render_template
-from monitor import monitor_loop
+import pytz
+from xml.etree import ElementTree as ET
 
 app = Flask(__name__)
-
 CHANNELS_FILE = "channels.json"
-VIDEOS_FILE = "videos.json"
-
 
 def load_channels():
     if os.path.exists(CHANNELS_FILE):
@@ -19,56 +17,59 @@ def load_channels():
 
 def save_channels(channels):
     with open(CHANNELS_FILE, "w", encoding="utf-8") as f:
-        json.dump(channels, f, indent=2, ensure_ascii=False)
+        json.dump(channels, f, indent=2)
 
-def load_videos():
-    if os.path.exists(VIDEOS_FILE):
-        with open(VIDEOS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+def fetch_latest_videos(channel_id, max_videos=10):
+    try:
+        rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
+        resp = requests.get(rss_url)
+        if resp.status_code != 200:
+            return []
+
+        root = ET.fromstring(resp.text)
+        entries = root.findall("{http://www.w3.org/2005/Atom}entry")[:max_videos]
+        videos = []
+
+        for entry in entries:
+            title = entry.find("{http://www.w3.org/2005/Atom}title").text
+            video_id = entry.find("{http://www.youtube.com/xml/schemas/2015}videoId").text
+            published = entry.find("{http://www.w3.org/2005/Atom}published").text
+
+            # Đổi thời gian sang giờ Việt Nam
+            utc_time = datetime.datetime.fromisoformat(published.replace("Z", "+00:00"))
+            vn_time = utc_time.astimezone(pytz.timezone("Asia/Ho_Chi_Minh"))
+            formatted_time = vn_time.strftime("%H:%M %d-%m-%Y")
+
+            videos.append({
+                "title": title,
+                "video_id": video_id,
+                "published": formatted_time
+            })
+
+        return videos
+    except Exception as e:
+        print(f"Lỗi khi lấy video từ kênh {channel_id}: {e}")
+        return []
 
 @app.route("/", methods=["GET"])
 def index():
     channels = load_channels()
-    all_videos = load_videos()
-    videos = []
+    all_videos = []
     for ch in channels:
-        v = all_videos.get(ch["channel_id"])
-        if v:
-            videos.append({
-                "name": ch["name"],
-                "video_id": v["video_id"],
-                "title": v["title"],
-                "published": v["published"]
-            })
-    return render_template("index.html", videos=videos)
+        videos = fetch_latest_videos(ch["channel_id"])
+        all_videos.append({"name": ch["name"], "videos": videos})
+    return render_template("index.html", all_videos=all_videos)
 
-@app.route("/add_channel", methods=["POST"])
+@app.route("/add", methods=["POST"])
 def add_channel():
-    url = request.form.get("url")
     name = request.form.get("name")
-    if not url or not name:
-        return "Thiếu URL hoặc tên", 400
-
-    import yt_dlp
-    ydl_opts = {"quiet": True, "extract_flat": True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            info = ydl.extract_info(url, download=False)
-            channel_id = info.get("channel_id")
-            if not channel_id:
-                return "Không thể trích xuất Channel ID từ URL", 400
-        except Exception as e:
-            return f"Lỗi: {e}", 400
-
-    channels = load_channels()
-    if any(c["channel_id"] == channel_id for c in channels):
-        return "Kênh đã tồn tại", 400
-
-    channels.append({"name": name, "url": url, "channel_id": channel_id, "added": datetime.datetime.now(datetime.UTC).isoformat()})
-    save_channels(channels)
+    channel_id = request.form.get("channel_id")
+    if name and channel_id:
+        channels = load_channels()
+        channels.append({"name": name, "channel_id": channel_id})
+        save_channels(channels)
     return redirect("/")
 
 if __name__ == "__main__":
-    threading.Thread(target=monitor_loop, daemon=True).start()
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
