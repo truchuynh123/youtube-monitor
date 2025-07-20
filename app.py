@@ -78,3 +78,7 @@ def add_channel():
     }
     save_channels(channels)
     return redirect(url_for("index"))
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))  # Render yêu cầu lấy PORT từ biến môi trường
+    app.run(host="0.0.0.0", port=port)
+
