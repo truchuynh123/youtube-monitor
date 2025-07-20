@@ -1,118 +1,78 @@
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, url_for
 import os
 import json
-import threading
-import time
-from datetime import datetime, timedelta
-import yt_dlp
+import datetime
+import subprocess
+import re
+from yt_dlp import YoutubeDL
 
 app = Flask(__name__)
+DATA_FILE = "channels.json"
 
-CHANNEL_FILE = 'channels.json'
-VIDEO_FILE = 'videos.json'
-
-# 🧩 Tạo file nếu chưa tồn tại
-if not os.path.exists(CHANNEL_FILE):
-    with open(CHANNEL_FILE, 'w', encoding='utf-8') as f:
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "w") as f:
         json.dump([], f)
 
-if not os.path.exists(VIDEO_FILE):
-    with open(VIDEO_FILE, 'w', encoding='utf-8') as f:
-        json.dump({}, f)
+def normalize_youtube_url(url_or_id):
+    # Nếu là channel ID
+    if re.match(r'^UC[\w-]{21}[AQgw]$', url_or_id):
+        return f"https://www.youtube.com/channel/{url_or_id}"
+    # Nếu là link @...
+    if re.match(r'^@[\w\d_-]+$', url_or_id):
+        return f"https://www.youtube.com/{url_or_id}"
+    # Nếu là URL đầy đủ hợp lệ
+    if url_or_id.startswith("http"):
+        return url_or_id
+    # Nếu là username dạng user/xyz
+    return f"https://www.youtube.com/user/{url_or_id}"
 
-# 🧩 Hàm tiện ích
-def load_channels():
-    with open(CHANNEL_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def save_channels(channels):
-    with open(CHANNEL_FILE, 'w', encoding='utf-8') as f:
-        json.dump(channels, f, indent=2, ensure_ascii=False)
-
-def load_videos():
-    with open(VIDEO_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def save_videos(videos):
-    with open(VIDEO_FILE, 'w', encoding='utf-8') as f:
-        json.dump(videos, f, indent=2, ensure_ascii=False)
-
-# 🧩 Lấy ID và tên từ link kênh
-def extract_channel_info(link):
-    ydl_opts = {'quiet': True, 'extract_flat': True}
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            info = ydl.extract_info(link, download=False)
-            return {
-                'id': info['id'],
-                'name': info.get('channel', info.get('title', 'Không tên'))
-            }
-        except Exception as e:
-            print(f"Lỗi lấy thông tin kênh: {e}")
-            return None
-
-# 🧩 Lấy video mới trong 24h gần nhất
-def fetch_recent_videos(channel_id):
+def get_channel_info(url):
     ydl_opts = {
         'quiet': True,
-        'extract_flat': True,
-        'force_generic_extractor': True,
-        'dump_single_json': True,
+        'skip_download': True,
+        'extract_flat': 'in_playlist',
+        'force_generic_extractor': False,
     }
-    url = f"https://www.youtube.com/channel/{channel_id}/videos"
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            data = ydl.extract_info(url, download=False)
-            videos = []
-            now = datetime.utcnow()
-            for entry in data.get('entries', []):
-                upload_date = entry.get('upload_date')
-                if upload_date:
-                    upload_time = datetime.strptime(upload_date, '%Y%m%d')
-                    if now - upload_time <= timedelta(days=1):
-                        videos.append({
-                            'id': entry['id'],
-                            'title': entry['title'],
-                            'uploaded': upload_time.strftime('%Y-%m-%d')
-                        })
-            return videos
-        except Exception as e:
-            print(f"Lỗi lấy video: {e}")
-            return []
+    with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        return {
+            "channel_id": info["id"],
+            "channel_title": info.get("title", "Unknown Channel")
+        }
 
-# 🧩 Nền: kiểm tra định kỳ mỗi 60s
-def background_updater():
-    while True:
-        videos = load_videos()
-        channels = load_channels()
-        for ch in channels:
-            new_videos = fetch_recent_videos(ch['id'])
-            if new_videos:
-                videos[ch['name']] = new_videos
-        save_videos(videos)
-        time.sleep(60)
-
-# 👉 Khởi động luồng nền
-threading.Thread(target=background_updater, daemon=True).start()
-
-# ==== ROUTES ====
-
-@app.route('/')
+@app.route("/")
 def index():
-    channels = load_channels()
-    videos = load_videos()
-    return render_template('index.html', channels=channels, videos=videos)
+    with open(DATA_FILE, "r") as f:
+        channels = json.load(f)
+    return render_template("index.html", channels=channels)
 
-@app.route('/add_channel', methods=['POST'])
+@app.route("/add_channel", methods=["POST"])
 def add_channel():
-    link = request.form.get('link')
-    info = extract_channel_info(link)
-    if info:
-        channels = load_channels()
-        if not any(c['id'] == info['id'] for c in channels):
-            channels.append(info)
-            save_channels(channels)
-    return redirect('/')
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    raw_input = request.form["channel_url"].strip()
+    normalized_url = normalize_youtube_url(raw_input)
 
+    try:
+        info = get_channel_info(normalized_url)
+    except Exception as e:
+        return f"Lỗi khi lấy thông tin kênh: {str(e)}", 400
+
+    with open(DATA_FILE, "r") as f:
+        channels = json.load(f)
+
+    if any(c["channel_id"] == info["channel_id"] for c in channels):
+        return redirect(url_for("index"))
+
+    new_channel = {
+        "channel_id": info["channel_id"],
+        "channel_title": info["channel_title"],
+        "url": normalized_url,
+        "added": datetime.datetime.utcnow().isoformat()
+    }
+    channels.append(new_channel)
+    with open(DATA_FILE, "w") as f:
+        json.dump(channels, f, indent=2)
+
+    return redirect(url_for("index"))
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
