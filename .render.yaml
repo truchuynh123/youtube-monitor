@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: youtube-monitor
+    env: python
+    plan: free
+    startCommand: python app.py

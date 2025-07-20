@@ -1,62 +1,74 @@
-from flask import Flask, render_template, request, redirect
-import requests
+import threading
 import json
 import os
+import datetime
+from flask import Flask, request, redirect, render_template
+from monitor import monitor_loop
 
 app = Flask(__name__)
-CHANNELS_FILE = "channels.json"
 
-# Load danh sách kênh từ file
+CHANNELS_FILE = "channels.json"
+VIDEOS_FILE = "videos.json"
+
+
 def load_channels():
     if os.path.exists(CHANNELS_FILE):
         with open(CHANNELS_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return []
 
-# Lưu danh sách kênh vào file
 def save_channels(channels):
     with open(CHANNELS_FILE, "w", encoding="utf-8") as f:
-        json.dump(channels, f, indent=2)
+        json.dump(channels, f, indent=2, ensure_ascii=False)
 
-# Lấy video mới nhất từ một kênh YouTube (qua RSS)
-def fetch_latest_video(channel_id):
-    try:
-        rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
-        resp = requests.get(rss_url)
-        if resp.status_code != 200:
-            return None
-
-        from xml.etree import ElementTree as ET
-        root = ET.fromstring(resp.text)
-        entry = root.find("{http://www.w3.org/2005/Atom}entry")
-        if entry is not None:
-            title = entry.find("{http://www.w3.org/2005/Atom}title").text
-            video_id = entry.find("{http://www.youtube.com/xml/schemas/2015}videoId").text
-            return {"title": title, "video_id": video_id}
-    except Exception as e:
-        print(f"Lỗi khi lấy video từ kênh {channel_id}: {e}")
-    return None
+def load_videos():
+    if os.path.exists(VIDEOS_FILE):
+        with open(VIDEOS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
 @app.route("/", methods=["GET"])
 def index():
     channels = load_channels()
+    all_videos = load_videos()
     videos = []
     for ch in channels:
-        video = fetch_latest_video(ch["channel_id"])
-        if video:
-            videos.append({"name": ch["name"], "video_id": video["video_id"], "title": video["title"]})
+        v = all_videos.get(ch["channel_id"])
+        if v:
+            videos.append({
+                "name": ch["name"],
+                "video_id": v["video_id"],
+                "title": v["title"],
+                "published": v["published"]
+            })
     return render_template("index.html", videos=videos)
 
-@app.route("/add", methods=["POST"])
+@app.route("/add_channel", methods=["POST"])
 def add_channel():
+    url = request.form.get("url")
     name = request.form.get("name")
-    channel_id = request.form.get("channel_id")
-    if name and channel_id:
-        channels = load_channels()
-        channels.append({"name": name, "channel_id": channel_id})
-        save_channels(channels)
+    if not url or not name:
+        return "Thiếu URL hoặc tên", 400
+
+    import yt_dlp
+    ydl_opts = {"quiet": True, "extract_flat": True}
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        try:
+            info = ydl.extract_info(url, download=False)
+            channel_id = info.get("channel_id")
+            if not channel_id:
+                return "Không thể trích xuất Channel ID từ URL", 400
+        except Exception as e:
+            return f"Lỗi: {e}", 400
+
+    channels = load_channels()
+    if any(c["channel_id"] == channel_id for c in channels):
+        return "Kênh đã tồn tại", 400
+
+    channels.append({"name": name, "url": url, "channel_id": channel_id, "added": datetime.datetime.now(datetime.UTC).isoformat()})
+    save_channels(channels)
     return redirect("/")
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Render sẽ cung cấp PORT qua biến môi trường
-    app.run(host="0.0.0.0", port=port)
+    threading.Thread(target=monitor_loop, daemon=True).start()
+    app.run(host="0.0.0.0", port=10000)
