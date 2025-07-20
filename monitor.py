@@ -3,6 +3,7 @@ import time
 import json
 import requests
 import os
+from datetime import datetime
 
 VIDEOS_FILE = "videos.json"
 CHANNELS_FILE = "channels.json"
@@ -42,17 +43,22 @@ def load_videos():
     return {}
 
 def monitor_loop():
-    print("[monitor] Bắt đầu kiểm tra video mới mỗi phút...")
+    print("⚙️ Đã khởi động monitor.py")
+    print("[monitor] Bắt đầu kiểm tra video mới mỗi phút...\n")
     while True:
         channels = load_channels()
         current_data = load_videos()
 
         for ch in channels:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] 🔍 Đang kiểm tra kênh: {ch['name']}")
             latest = fetch_latest_video(ch["channel_id"])
             if latest:
                 last_known = current_data.get(ch["channel_id"])
                 if not last_known or last_known["video_id"] != latest["video_id"]:
-                    print(f"[NEW VIDEO] {ch['name']}: {latest['title']}")
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] 🆕 [NEW VIDEO] {ch['name']}: {latest['title']}")
                     current_data[ch["channel_id"]] = latest
                     save_videos(current_data)
         time.sleep(60)
+
+if __name__ == "__main__":
+    monitor_loop()
