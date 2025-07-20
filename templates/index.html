@@ -3,84 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <title>YouTube Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f9f9f9;
-            padding: 30px;
-            color: #333;
-        }
-        h1 {
-            color: #d00;
-        }
-        form {
-            margin-bottom: 20px;
-        }
-        label, input, button {
-            display: block;
-            margin-top: 10px;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 8px;
-        }
-        button {
-            padding: 10px 15px;
-            margin-top: 10px;
-            background-color: #d00;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #a00;
-        }
-        .channel {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: white;
-            border-radius: 5px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.1);
-        }
-        .video {
-            margin-left: 20px;
-        }
-        a {
-            color: #d00;
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-        hr {
-            margin: 40px 0;
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        h1 { color: #333; }
+        form { margin-bottom: 20px; }
+        input, button { padding: 8px; margin: 5px; }
+        .channel-block { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background: #fff; border-radius: 5px; }
     </style>
 </head>
 <body>
-    <h1>YouTube Monitor 📺</h1>
+    <h1>🎥 YouTube Video Monitor</h1>
 
     <form action="/add_channel" method="post">
-        <label for="channel_url">Link kênh YouTube:</label>
-        <input type="text" id="channel_url" name="channel_url" placeholder="https://www.youtube.com/@MixiGaming" required>
-
-        <label for="folder_name">Tên thư mục lưu (tùy chọn):</label>
-        <input type="text" id="folder_name" name="folder_name" placeholder="MixiGaming">
-
+        <label>🔗 Link kênh YouTube:</label><br>
+        <input type="text" name="channel_url" size="60" required><br>
+        <label>📂 Thư mục lưu video:</label><br>
+        <input type="text" name="folder_name" required><br>
         <button type="submit">➕ Thêm kênh</button>
     </form>
 
     <hr>
 
-    <h2>📜 Danh sách kênh đã thêm:</h2>
-    {% for cid, info in channels.items() %}
-        <div class="channel">
-            <strong>{{ info['name'] }} ({{ cid }})</strong><br>
-            <a href="https://www.youtube.com/channel/{{ cid }}" target="_blank">🔗 Mở kênh</a> |
-            <a href="/videos/{{ cid }}">📹 Xem video mới trong 1 ngày</a>
-        </div>
+    <h2>📺 Danh sách kênh đang theo dõi</h2>
+
+    {% if channels %}
+        {% for ch in channels %}
+            <div class="channel-block">
+                <p><strong>📛 Tên kênh:</strong> {{ ch.name }}</p>
+                <p><strong>🆔 Channel ID:</strong> {{ ch.channel_id }}</p>
+                <p><strong>📂 Thư mục lưu:</strong> {{ ch.folder }}</p>
+            </div>
+        {% endfor %}
     {% else %}
-        <p>Chưa có kênh nào.</p>
-    {% endfor %}
+        <p>Chưa có kênh nào được theo dõi.</p>
+    {% endif %}
 </body>
 </html>
