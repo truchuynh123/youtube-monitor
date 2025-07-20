@@ -1,35 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Theo dõi kênh YouTube</title>
+    <title>YouTube Monitor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+            padding: 30px;
+            color: #333;
+        }
+        h1 {
+            color: #d00;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label, input, button {
+            display: block;
+            margin-top: 10px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+        }
+        button {
+            padding: 10px 15px;
+            margin-top: 10px;
+            background-color: #d00;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #a00;
+        }
+        .channel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+        .video {
+            margin-left: 20px;
+        }
+        a {
+            color: #d00;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        hr {
+            margin: 40px 0;
+        }
+    </style>
 </head>
 <body>
-    <h1>🎬 Danh sách video mới</h1>
+    <h1>YouTube Monitor 📺</h1>
 
-    {% for channel in channels %}
-    <div style="border: 1px solid #aaa; margin: 10px; padding: 10px;">
-        <h2>{{ channel.name }}</h2>
-        {% if videos[channel.name] %}
-        <ul>
-            {% for video in videos[channel.name] %}
-            <li>
-                <a href="https://www.youtube.com/watch?v={{ video.id }}" target="_blank">{{ video.title }}</a>
-                (📅 {{ video.uploaded }})
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p>Không có video mới trong 24h</p>
-        {% endif %}
-    </div>
-    {% endfor %}
+    <form action="/add_channel" method="post">
+        <label for="channel_url">Link kênh YouTube:</label>
+        <input type="text" id="channel_url" name="channel_url" placeholder="https://www.youtube.com/@MixiGaming" required>
 
-    <h2>➕ Thêm kênh mới</h2>
-    <form method="post" action="/add_channel">
-        <label>Link kênh (vd: https://www.youtube.com/@MixiGaming3con):</label><br>
-        <input type="text" name="link" style="width: 400px;" required>
-        <input type="submit" value="Thêm">
+        <label for="folder_name">Tên thư mục lưu (tùy chọn):</label>
+        <input type="text" id="folder_name" name="folder_name" placeholder="MixiGaming">
+
+        <button type="submit">➕ Thêm kênh</button>
     </form>
+
+    <hr>
+
+    <h2>📜 Danh sách kênh đã thêm:</h2>
+    {% for cid, info in channels.items() %}
+        <div class="channel">
+            <strong>{{ info['name'] }} ({{ cid }})</strong><br>
+            <a href="https://www.youtube.com/channel/{{ cid }}" target="_blank">🔗 Mở kênh</a> |
+            <a href="/videos/{{ cid }}">📹 Xem video mới trong 1 ngày</a>
+        </div>
+    {% else %}
+        <p>Chưa có kênh nào.</p>
+    {% endfor %}
 </body>
 </html>
