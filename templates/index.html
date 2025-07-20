@@ -4,24 +4,27 @@
     <title>YouTube Monitor</title>
 </head>
 <body>
-    <h1>Theo dõi video mới từ kênh YouTube</h1>
-    <form action="/add_channel" method="post">
-        <input type="text" name="url" placeholder="Link kênh YouTube" required>
-        <input type="text" name="name" placeholder="Tên kênh" required>
-        <button type="submit">Thêm kênh</button>
-    </form>
-
-    <h2>Video mới theo từng kênh</h2>
-    <div style="display: flex; flex-wrap: wrap;">
-        {% for v in videos %}
-        <div style="border: 1px solid #ccc; padding: 10px; margin: 5px; width: 300px;">
-            <h3>{{ v.name }}</h3>
-            <a href="https://www.youtube.com/watch?v={{ v.video_id }}" target="_blank">
-                {{ v.title }}
-            </a><br>
-            <small>Đăng lúc: {{ v.published }}</small>
-        </div>
+    <h1>Các video mới</h1>
+    {% for v in videos %}
+    <div style="border:1px solid #ccc; margin-bottom:10px; padding:10px;">
+        <h3>{{ v.name }}</h3>
+        <ul>
+        {% for video in v.videos %}
+            <li>
+                <a href="https://www.youtube.com/watch?v={{ video.video_id }}" target="_blank">
+                    {{ video.title }}
+                </a> — {{ video.published }}
+            </li>
         {% endfor %}
+        </ul>
     </div>
+    {% endfor %}
+
+    <h2>Thêm kênh mới</h2>
+    <form method="POST" action="/add">
+        Tên kênh: <input name="name"><br>
+        Channel ID: <input name="channel_id"><br>
+        <button type="submit">Thêm</button>
+    </form>
 </body>
 </html>

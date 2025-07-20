@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect
 import requests
 import json
 import os
-import datetime
+from datetime import datetime
 import pytz
 from xml.etree import ElementTree as ET
 
@@ -19,7 +19,9 @@ def save_channels(channels):
     with open(CHANNELS_FILE, "w", encoding="utf-8") as f:
         json.dump(channels, f, indent=2)
 
-def fetch_latest_videos(channel_id, max_videos=10):
+# Lấy 10 video mới nhất từ một kênh YouTube (RSS)
+def fetch_latest_videos(channel_id):
+    videos = []
     try:
         rss_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
         resp = requests.get(rss_url)
@@ -27,29 +29,25 @@ def fetch_latest_videos(channel_id, max_videos=10):
             return []
 
         root = ET.fromstring(resp.text)
-        entries = root.findall("{http://www.w3.org/2005/Atom}entry")[:max_videos]
-        videos = []
+        entries = root.findall("{http://www.w3.org/2005/Atom}entry")
 
-        for entry in entries:
+        for entry in entries[:10]:  # lấy 10 video đầu tiên
             title = entry.find("{http://www.w3.org/2005/Atom}title").text
             video_id = entry.find("{http://www.youtube.com/xml/schemas/2015}videoId").text
             published = entry.find("{http://www.w3.org/2005/Atom}published").text
-
-            # Đổi thời gian sang giờ Việt Nam
-            utc_time = datetime.datetime.fromisoformat(published.replace("Z", "+00:00"))
+            # Chuyển thời gian về múi giờ Việt Nam
+            utc_time = datetime.strptime(published, "%Y-%m-%dT%H:%M:%S%z")
             vn_time = utc_time.astimezone(pytz.timezone("Asia/Ho_Chi_Minh"))
-            formatted_time = vn_time.strftime("%H:%M %d-%m-%Y")
+            published_str = vn_time.strftime("%H:%M %d/%m/%Y")
 
             videos.append({
                 "title": title,
                 "video_id": video_id,
-                "published": formatted_time
+                "published": published_str
             })
-
-        return videos
     except Exception as e:
         print(f"Lỗi khi lấy video từ kênh {channel_id}: {e}")
-        return []
+    return videos
 
 @app.route("/", methods=["GET"])
 def index():
@@ -57,8 +55,12 @@ def index():
     all_videos = []
     for ch in channels:
         videos = fetch_latest_videos(ch["channel_id"])
-        all_videos.append({"name": ch["name"], "videos": videos})
-    return render_template("index.html", all_videos=all_videos)
+        if videos:
+            all_videos.append({
+                "name": ch["name"],
+                "videos": videos
+            })
+    return render_template("index.html", videos=all_videos)
 
 @app.route("/add", methods=["POST"])
 def add_channel():
