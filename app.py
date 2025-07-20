@@ -113,3 +113,6 @@ def add_channel():
             channels.append(info)
             save_channels(channels)
     return redirect('/')
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
+
