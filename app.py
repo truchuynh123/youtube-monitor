@@ -1,77 +1,78 @@
 from flask import Flask, render_template, request, redirect, url_for
-import os
 import json
-import datetime
-import subprocess
+import os
 import re
-from yt_dlp import YoutubeDL
+import subprocess
+import datetime
+from datetime import datetime, UTC
+import requests
 
 app = Flask(__name__)
 DATA_FILE = "channels.json"
 
-if not os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "w") as f:
-        json.dump([], f)
+def load_channels():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
-def normalize_youtube_url(url_or_id):
-    # Nếu là channel ID
-    if re.match(r'^UC[\w-]{21}[AQgw]$', url_or_id):
-        return f"https://www.youtube.com/channel/{url_or_id}"
-    # Nếu là link @...
-    if re.match(r'^@[\w\d_-]+$', url_or_id):
-        return f"https://www.youtube.com/{url_or_id}"
-    # Nếu là URL đầy đủ hợp lệ
-    if url_or_id.startswith("http"):
-        return url_or_id
-    # Nếu là username dạng user/xyz
-    return f"https://www.youtube.com/user/{url_or_id}"
+def save_channels(channels):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(channels, f, indent=4, ensure_ascii=False)
 
-def get_channel_info(url):
-    ydl_opts = {
-        'quiet': True,
-        'skip_download': True,
-        'extract_flat': 'in_playlist',
-        'force_generic_extractor': False,
-    }
-    with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return {
-            "channel_id": info["id"],
-            "channel_title": info.get("title", "Unknown Channel")
-        }
+def extract_channel_id(url):
+    if "@"+url.strip("@") == url:
+        url = "https://www.youtube.com/" + url
+    if "/@" in url:
+        try:
+            response = requests.get(url)
+            match = re.search(r'"channelId":"(UC[\w-]{22})"', response.text)
+            if match:
+                return match.group(1)
+        except Exception as e:
+            print(f"Lỗi khi lấy channel ID từ handle: {e}")
+    match = re.search(r"(UC[\w-]{22})", url)
+    return match.group(1) if match else None
 
-@app.route("/")
+def get_channel_name(channel_id):
+    try:
+        url = f"https://www.youtube.com/channel/{channel_id}"
+        response = requests.get(url)
+        match = re.search(r'"title":"(.*?)"', response.text)
+        if match:
+            return match.group(1)
+    except Exception as e:
+        print(f"Lỗi khi lấy tên kênh: {e}")
+    return "Không xác định"
+
+@app.route("/", methods=["GET"])
 def index():
-    with open(DATA_FILE, "r") as f:
-        channels = json.load(f)
+    channels = load_channels()
     return render_template("index.html", channels=channels)
 
 @app.route("/add_channel", methods=["POST"])
 def add_channel():
-    raw_input = request.form["channel_url"].strip()
-    normalized_url = normalize_youtube_url(raw_input)
+    url = request.form.get("channel_url")
+    folder = request.form.get("folder_name")
+    download_path = request.form.get("download_path") or "downloads"
 
-    try:
-        info = get_channel_info(normalized_url)
-    except Exception as e:
-        return f"Lỗi khi lấy thông tin kênh: {str(e)}", 400
-
-    with open(DATA_FILE, "r") as f:
-        channels = json.load(f)
-
-    if any(c["channel_id"] == info["channel_id"] for c in channels):
+    if not url or not folder:
         return redirect(url_for("index"))
 
-    new_channel = {
-        "channel_id": info["channel_id"],
-        "channel_title": info["channel_title"],
-        "url": normalized_url,
-        "added": datetime.datetime.utcnow().isoformat()
-    }
-    channels.append(new_channel)
-    with open(DATA_FILE, "w") as f:
-        json.dump(channels, f, indent=2)
+    channel_id = extract_channel_id(url)
+    if not channel_id:
+        return "Không thể trích xuất Channel ID từ URL", 400
 
+    channel_name = get_channel_name(channel_id)
+    channels = load_channels()
+
+    channels[channel_id] = {
+        "name": channel_name,
+        "folder": folder,
+        "download_path": download_path,
+        "added": datetime.now(UTC).isoformat()
+    }
+    save_channels(channels)
     return redirect(url_for("index"))
 
 if __name__ == "__main__":
